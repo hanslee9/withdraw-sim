@@ -13,6 +13,7 @@ from simulator import (
     get_effective_start_date,
     buy_and_hold_metrics,
     get_annual_returns,
+    compute_year_fractions,
     fetch_us_annual_inflation,
     simulate_withdrawal,
 )
@@ -34,6 +35,7 @@ with st.sidebar:
         start_date = st.date_input(
             "분석 시작일",
             value=dt.date(2015, 1, 1),
+            min_value=dt.date(1950, 1, 1),
             max_value=dt.date.today(),
         )
     with col2:
@@ -78,15 +80,14 @@ if run:
         c2.metric("CAGR", f"{bh['cagr']*100:.2f}%")
         c3.metric("MDD", f"{bh['mdd']*100:.2f}%")
 
-        # --- 연도별 수익률 ---
+        # --- 연도별 수익률 및 보유비율(첫해/마지막해 프로레이션용) ---
         annual_returns = get_annual_returns(price)
+        year_fractions = compute_year_fractions(price)
         years = annual_returns.index.tolist()
 
-        # --- 인플레이션 ---
-        st.subheader("2️⃣ 인플레이션 데이터")
+        # --- 인플레이션 (연도별 상세는 생략하고, 시뮬레이션 계산에는 그대로 사용) ---
         if manual_inflation:
             annual_inflation = pd.Series({y: manual_rate for y in years}, name="inflation")
-            st.warning(f"수동 입력값 {manual_rate*100:.1f}% 를 전 기간에 동일 적용했습니다.")
         else:
             try:
                 with st.spinner("미국 CPI(인플레이션) 데이터 수집 중 (FRED)..."):
@@ -97,15 +98,13 @@ if run:
                 st.error(f"인플레이션 자동 수집 실패: {e}\n사이드바에서 수동 입력을 사용해주세요.")
                 st.stop()
 
-        st.dataframe(
-            (annual_inflation * 100).round(2).rename("인플레이션(%)").to_frame(),
-            use_container_width=True,
-        )
+        avg_inflation = annual_inflation.mean()
 
         # --- 인출 시뮬레이션 ---
-        st.subheader("3️⃣ 인출 시뮬레이션 결과")
+        st.subheader(f"2️⃣ 인출 시뮬레이션 결과 (평균 인플레이션 {avg_inflation*100:.2f}%, 연도별 상세 생략)")
         result = simulate_withdrawal(
-            annual_returns, annual_inflation, initial_investment, initial_withdrawal
+            annual_returns, annual_inflation, initial_investment, initial_withdrawal,
+            year_fractions=year_fractions,
         )
 
         c1, c2, c3 = st.columns(3)
@@ -124,6 +123,7 @@ if run:
             display_table[c] = (display_table[c] * 100).round(2)
         for c in money_cols:
             display_table[c] = display_table[c].round(0)
+        display_table["year_fraction"] = display_table["year_fraction"].round(3)
 
         st.dataframe(display_table, use_container_width=True)
 

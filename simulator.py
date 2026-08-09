@@ -120,6 +120,33 @@ def buy_and_hold_metrics(price: pd.Series) -> dict:
 # 4. 연도별 수익률 / 인플레이션 데이터 가공
 # ---------------------------------------------------------------------------
 
+def compute_year_fractions(price: pd.Series) -> pd.Series:
+    """
+    연도별 '보유 비율'을 계산한다. 중간 연도는 1.0, 첫 해/마지막 해는
+    실제 보유 일수 / 365.25 로 프로레이션한다 (인출금액 계산에 사용).
+    """
+    idx = price.index
+    years = sorted(set(idx.year))
+    actual_start = idx[0].date()
+    actual_end = idx[-1].date()
+
+    fractions = {}
+    for y in years:
+        year_start = dt.date(y, 1, 1)
+        year_end = dt.date(y, 12, 31)
+        eff_start = max(year_start, actual_start)
+        eff_end = min(year_end, actual_end)
+
+        if len(years) > 1 and years[0] < y < years[-1]:
+            frac = 1.0
+        else:
+            frac = (eff_end - eff_start).days / 365.25
+            frac = max(0.0, min(frac, 1.0))
+        fractions[y] = frac
+
+    return pd.Series(fractions, name="year_fraction")
+
+
 def get_annual_returns(price: pd.Series) -> pd.Series:
     """
     연도별 수익률을 계산한다.
@@ -186,6 +213,7 @@ def simulate_withdrawal(
     annual_inflation: pd.Series,
     initial_investment: float,
     initial_withdrawal: float,
+    year_fractions: pd.Series | None = None,
 ) -> WithdrawSimResult:
     """
     연도별 시뮬레이션.
@@ -194,7 +222,10 @@ def simulate_withdrawal(
     ----
     - balance_after_return = balance_start * (1 + 그해 주가수익률)
     - profit = balance_after_return - balance_start
-    - withdrawal_target: 첫해는 initial_withdrawal, 이후 매년 그 해 인플레이션율만큼 증액
+    - full_withdrawal_target: 만약 해당 연도를 '온전히 1년' 보유했다면 인출했을 금액.
+      첫해는 initial_withdrawal, 이후 매년 그 해 인플레이션율만큼 증액.
+    - withdrawal_target(실제 인출 목표액) = full_withdrawal_target * year_fraction
+      (첫해/마지막해처럼 실제 보유 일수가 1년 미만이면 비율만큼 축소, 중간 연도는 1.0)
     - 실제 인출액:
         profit >= withdrawal_target  -> withdrawal_target 전액 인출
         0 < profit < withdrawal_target -> profit 만큼만 인출
@@ -204,19 +235,25 @@ def simulate_withdrawal(
         balance_next_start = balance_after_withdrawal / (1 + 그해 인플레이션율)
     """
     years = annual_returns.index.tolist()
+    if year_fractions is None:
+        year_fractions = pd.Series({y: 1.0 for y in years})
+
     rows = []
 
     balance_start = initial_investment
-    withdrawal_target = initial_withdrawal
+    full_withdrawal_target = initial_withdrawal
 
     for i, y in enumerate(years):
         r = annual_returns.loc[y]
         infl = annual_inflation.loc[y] if y in annual_inflation.index else 0.0
         if pd.isna(infl):
             infl = 0.0
+        frac = year_fractions.loc[y] if y in year_fractions.index else 1.0
 
         if i > 0:
-            withdrawal_target = withdrawal_target * (1 + infl)
+            full_withdrawal_target = full_withdrawal_target * (1 + infl)
+
+        withdrawal_target = full_withdrawal_target * frac
 
         balance_after_return = balance_start * (1 + r)
         profit = balance_after_return - balance_start
@@ -235,6 +272,7 @@ def simulate_withdrawal(
             "year": y,
             "stock_return": r,
             "inflation": infl,
+            "year_fraction": frac,
             "balance_start": balance_start,
             "balance_after_return": balance_after_return,
             "profit": profit,
