@@ -176,18 +176,43 @@ if run:
                     f"자동 보정하지 않으므로 실제 운용 시 수동 대응이 필요합니다."
                 )
 
-            # 화면 표시용: 핵심 6개 항목만 (A=필요인출, B=주식인출, C=버퍼인출, B-C=순이동, 계좌잔고 2개)
-            display_table = pd.DataFrame({
-                "필요인출(A)": result.table["w_target"],
-                "주식인출(B)": result.table["stock_withdrawal"],
-                "버퍼인출(C)": result.table["buffer_withdrawal"],
-                "B-C": result.table["stock_withdrawal"] - result.table["buffer_withdrawal"],
-                "주식잔고": result.table["stock_balance_after_withdrawal"],
-                "버퍼잔고": result.table["buffer_balance_after_withdrawal"],
-            }).round(0)
+            # 화면 표시: 연도별 상세(수익률·인플레이션·단계별 잔고)는 그대로 두고,
+            # 인출 관련 항목만 A(필요인출)/B(주식인출)/C(버퍼 순인출, 부호있음)/B-C 로 압축.
+            # C(버퍼인출) = buffer_withdrawal(실제 유출, +) - buffer_deposit(리필 유입, -)
+            #   -> 주식계좌가 풀로 인출되는 해: C가 음수(= -W*(alpha-1), 버퍼 잔고 증가)
+            #   -> 주식계좌 수익이 0 이하인 해: C = +W (버퍼 잔고가 W만큼 감소)
+            display_table = result.table.copy()
+            display_table["필요인출(A)"] = display_table["w_target"]
+            display_table["주식인출(B)"] = display_table["stock_withdrawal"]
+            display_table["버퍼인출(C)"] = display_table["buffer_withdrawal"] - display_table["buffer_deposit"]
+            display_table["B-C"] = display_table["주식인출(B)"] - display_table["버퍼인출(C)"]
+            display_table = display_table.drop(columns=[
+                "w_target", "stock_target", "stock_withdrawal", "buffer_deposit",
+                "buffer_withdrawal", "actual_total_withdrawal", "unmet_shortfall",
+            ])
+
+            pct_cols = ["stock_return", "inflation"]
+            money_cols = [c for c in display_table.columns if c not in pct_cols + ["year_fraction"]]
+            for c in pct_cols:
+                display_table[c] = (display_table[c] * 100).round(2)
+            for c in money_cols:
+                display_table[c] = display_table[c].round(0)
+            display_table["year_fraction"] = display_table["year_fraction"].round(3)
+
+            # 보기 좋은 순서로 재배열
+            col_order = [
+                "stock_return", "inflation", "year_fraction",
+                "stock_balance_start", "stock_after_return", "stock_profit",
+                "필요인출(A)", "주식인출(B)",
+                "buffer_balance_start", "buffer_after_interest",
+                "버퍼인출(C)", "B-C",
+                "stock_balance_after_withdrawal", "buffer_balance_after_withdrawal",
+                "total_balance_after_withdrawal",
+                "stock_balance_next_start", "buffer_balance_next_start",
+            ]
+            display_table = display_table[[c for c in col_order if c in display_table.columns]]
 
             st.dataframe(display_table, use_container_width=True)
-            st.caption("수익률·인플레이션 등 상세 데이터는 아래 CSV 다운로드에 전체 포함되어 있습니다.")
 
             # --- 잔고 추이 차트 (주식/버퍼/합계 동일 기준) ---
             fig = go.Figure()
