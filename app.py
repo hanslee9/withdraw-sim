@@ -19,7 +19,7 @@ from simulator import (
 )
 
 st.set_page_config(page_title="withdraw-sim", layout="wide")
-st.title("📉 장기투자 + 정기 인출 시뮬레이터")
+st.markdown("### 📉 장기투자 + 정기 인출 시뮬레이터")
 st.caption("예시: AAPL 장기 보유 중 매년 일정 금액을 인출할 때 원리금 추이 분석")
 
 # ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ if run:
         bh_end_value = initial_investment * (bh["end_price"] / bh["start_price"])
         bh_total_return = bh_end_value / bh_start_value - 1
 
-        st.subheader("1️⃣ Buy & Hold 벤치마크 (원종목 기준, 초기 투자원금 적용)")
+        st.markdown("##### 1️⃣ Buy & Hold 벤치마크 (원종목 기준, 초기 투자원금 적용)")
         r1c1, r1c2, r1c3 = st.columns(3)
         r1c1.metric("Start Value", f"${bh_start_value:,.0f}")
         r1c2.metric("End Value", f"${bh_end_value:,.0f}")
@@ -110,7 +110,7 @@ if run:
         avg_inflation = annual_inflation.mean()
 
         # --- 인출 시뮬레이션 ---
-        st.subheader(f"2️⃣ 인출 시뮬레이션 결과 (평균 인플레이션 {avg_inflation*100:.2f}%, 연도별 상세 생략)")
+        st.markdown(f"##### 2️⃣ 인출 시뮬레이션 결과 (평균 인플레이션 {avg_inflation*100:.2f}%, 연도별 상세 생략)")
         result = simulate_withdrawal(
             annual_returns, annual_inflation, initial_investment, initial_withdrawal,
             year_fractions=year_fractions,
@@ -120,6 +120,14 @@ if run:
         c1.metric("End Value", f"${result.end_value:,.0f}")
         c2.metric("총 수익률", f"{result.total_return*100:.2f}%")
         c3.metric("연환산 복리수익률 (CAGR)", f"{result.cagr*100:.2f}%")
+
+        total_target = result.table["withdrawal_target"].sum()
+        total_actual = result.table["actual_withdrawal"].sum()
+        st.caption(
+            f"기간 전체 필요 인출금액(누계): **${total_target:,.0f}** · "
+            f"실제 인출금액(누계): **${total_actual:,.0f}** "
+            f"(미인출 차액: ${total_target - total_actual:,.0f})"
+        )
 
         display_table = result.table.copy()
         pct_cols = ["stock_return", "inflation"]
