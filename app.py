@@ -31,6 +31,24 @@ st.markdown(
 st.markdown("### 📉 장기투자 + 정기 인출 시뮬레이터")
 st.caption("예시: AAPL 장기 보유 중 매년 일정 금액을 인출할 때 원리금 추이 분석")
 
+
+def style_table(df, money_cols, pct_cols=None):
+    """금액 컬럼은 천단위 콤마, 마이너스 값은 빨간 글씨로 스타일링."""
+    pct_cols = pct_cols or []
+    fmt = {c: "{:,.0f}" for c in money_cols}
+    fmt.update({c: "{:.2f}%" for c in pct_cols})
+
+    def _color_negative(v):
+        try:
+            return "color: #d33" if float(v) < 0 else ""
+        except (TypeError, ValueError):
+            return ""
+
+    styler = df.style.format(fmt)
+    style_fn = getattr(styler, "map", None) or styler.applymap
+    styler = style_fn(_color_negative, subset=money_cols + pct_cols)
+    return styler
+
 # ---------------------------------------------------------------------------
 # 입력
 # ---------------------------------------------------------------------------
@@ -190,8 +208,16 @@ if run:
             })
             display_table["B-C"] = (display_table["주식인출(B)"] - display_table["버퍼인출(C)"]).round(0)
             display_table["연말 버퍼잔액"] = result.table["buffer_balance_after_withdrawal"].round(0)
+            display_table["총 투자잔액"] = result.table["total_balance_after_withdrawal"].round(0)
 
-            st.dataframe(display_table, use_container_width=True)
+            money_cols_2b = [
+                "연말 주식잔액", "주가수익", "필요인출(A)", "주식인출(B)",
+                "버퍼인출(C)", "B-C", "연말 버퍼잔액", "총 투자잔액",
+            ]
+            st.dataframe(
+                style_table(display_table, money_cols_2b, pct_cols=["주식수익률(%)", "인플레이션(%)"]),
+                use_container_width=True,
+            )
             st.caption("표의 마지막 행 '연말 주식잔액'·'연말 버퍼잔액'은 위 Summary의 최종 잔고와 동일한 값입니다.")
 
             # --- 잔고 추이 차트 (주식/버퍼/합계 동일 기준) ---
@@ -245,7 +271,10 @@ if run:
                 "인출후잔고": result.table["balance_after_withdrawal"],
             }).round(0)
 
-            st.dataframe(display_table, use_container_width=True)
+            st.dataframe(
+                style_table(display_table, ["필요인출", "실제인출", "인출후잔고"]),
+                use_container_width=True,
+            )
             st.caption("수익률·인플레이션 등 상세 데이터는 아래 CSV 다운로드에 전체 포함되어 있습니다.")
 
             fig = go.Figure()
