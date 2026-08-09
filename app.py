@@ -176,21 +176,23 @@ if run:
                     f"자동 보정하지 않으므로 실제 운용 시 수동 대응이 필요합니다."
                 )
 
-            # 화면 표시: 사용자 지정 10개 항목(연도 포함)으로 압축.
-            # CSV 다운로드는 기존과 동일하게 result.table 원본 전체 유지.
+            # 화면 표시: 사용자 지정 9개 항목(연도 포함 10개)으로 압축.
+            # "연말 ○○잔액"은 Summary/그래프와 완전히 동일한 기준(그 해 수익률+인출 반영 후 명목값)을
+            # 사용해서, 마지막 행이 Summary의 최종 잔고와 정확히 일치하도록 함 (누계 개념).
             display_table = pd.DataFrame({
                 "주식수익률(%)": (result.table["stock_return"] * 100).round(2),
                 "인플레이션(%)": (result.table["inflation"] * 100).round(2),
-                "연말 주식잔액": result.table["stock_balance_start"].round(0),
+                "연말 주식잔액": result.table["stock_balance_after_withdrawal"].round(0),
                 "주가수익": result.table["stock_profit"].round(0),
                 "필요인출(A)": result.table["w_target"].round(0),
                 "주식인출(B)": result.table["stock_withdrawal"].round(0),
                 "버퍼인출(C)": (result.table["buffer_withdrawal"] - result.table["buffer_deposit"]).round(0),
             })
             display_table["B-C"] = (display_table["주식인출(B)"] - display_table["버퍼인출(C)"]).round(0)
-            display_table["물가감안 버퍼잔액"] = result.table["buffer_balance_next_start"].round(0)
+            display_table["연말 버퍼잔액"] = result.table["buffer_balance_after_withdrawal"].round(0)
 
             st.dataframe(display_table, use_container_width=True)
+            st.caption("표의 마지막 행 '연말 주식잔액'·'연말 버퍼잔액'은 위 Summary의 최종 잔고와 동일한 값입니다.")
 
             # --- 잔고 추이 차트 (주식/버퍼/합계 동일 기준) ---
             fig = go.Figure()
