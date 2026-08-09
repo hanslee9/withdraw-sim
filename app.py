@@ -72,13 +72,22 @@ if run:
         if effective_start != start_date:
             st.info(f"'{ticker}' 상장일이 입력한 시작일보다 늦어 **{effective_start}** 부터 분석합니다.")
 
-        # --- Buy & Hold 벤치마크 (CAGR, MDD) ---
+        # --- Buy & Hold 벤치마크 (Start/End Value, 총수익률, CAGR, MDD) ---
         bh = buy_and_hold_metrics(price)
-        st.subheader("1️⃣ Buy & Hold 벤치마크 (원종목 기준)")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("분석 기간", f"{bh['years']:.1f}년")
-        c2.metric("CAGR", f"{bh['cagr']*100:.2f}%")
-        c3.metric("MDD", f"{bh['mdd']*100:.2f}%")
+        bh_start_value = initial_investment
+        bh_end_value = initial_investment * (bh["end_price"] / bh["start_price"])
+        bh_total_return = bh_end_value / bh_start_value - 1
+
+        st.subheader("1️⃣ Buy & Hold 벤치마크 (원종목 기준, 초기 투자원금 적용)")
+        r1c1, r1c2, r1c3 = st.columns(3)
+        r1c1.metric("Start Value", f"${bh_start_value:,.0f}")
+        r1c2.metric("End Value", f"${bh_end_value:,.0f}")
+        r1c3.metric("총 수익률", f"{bh_total_return*100:.2f}%")
+
+        r2c1, r2c2, r2c3 = st.columns(3)
+        r2c1.metric("분석 기간", f"{bh['years']:.1f}년")
+        r2c2.metric("CAGR", f"{bh['cagr']*100:.2f}%")
+        r2c3.metric("MDD", f"{bh['mdd']*100:.2f}%")
 
         # --- 연도별 수익률 및 보유비율(첫해/마지막해 프로레이션용) ---
         annual_returns = get_annual_returns(price)
