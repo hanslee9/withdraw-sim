@@ -20,6 +20,14 @@ from simulator import (
 )
 
 st.set_page_config(page_title="withdraw-sim", layout="wide")
+st.markdown(
+    """
+    <style>
+    [data-testid="stDataFrame"] * { font-size: 0.82rem !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 st.markdown("### 📉 장기투자 + 정기 인출 시뮬레이터")
 st.caption("예시: AAPL 장기 보유 중 매년 일정 금액을 인출할 때 원리금 추이 분석")
 
@@ -133,10 +141,8 @@ if run:
             stock_initial = initial_investment * stock_ratio_pct / 100
             buffer_initial = initial_investment * (1 - stock_ratio_pct / 100)
 
-            st.markdown(
-                f"##### 2️⃣ 인출 시뮬레이션 결과 — 주식+현금버퍼 2-트랙 "
-                f"(평균 인플레이션 {avg_inflation*100:.2f}%, 연도별 상세 생략)"
-            )
+            st.markdown("##### 2️⃣ 인출 시뮬레이션 결과 (주식+버퍼 2-트랙)")
+            st.caption(f"평균 인플레이션 {avg_inflation*100:.2f}% · 상세 연도별 데이터는 표에서 확인")
             result = simulate_two_bucket_withdrawal(
                 annual_returns, annual_inflation,
                 stock_initial, buffer_initial, buffer_rate,
@@ -166,27 +172,22 @@ if run:
             if result.total_shortfall > 1:
                 st.warning(
                     f"⚠️ 일부 연도에 주식·버퍼 계좌 모두 잔고가 부족해 목표 인출액을 채우지 못했습니다 "
-                    f"(누적 미인출액 ${result.total_shortfall:,.0f}). 결과 테이블의 'unmet_shortfall' 컬럼을 확인하세요. "
-                    f"이 경우는 자동 보정하지 않으므로 실제 운용 시 수동 대응이 필요합니다."
+                    f"(누적 미인출액 ${result.total_shortfall:,.0f}). CSV의 'unmet_shortfall' 컬럼을 확인하세요. "
+                    f"자동 보정하지 않으므로 실제 운용 시 수동 대응이 필요합니다."
                 )
 
-            display_table = result.table.copy()
-            pct_cols = ["stock_return", "inflation"]
-            money_cols = [
-                "w_target", "stock_target", "stock_balance_start", "stock_after_return", "stock_profit",
-                "stock_withdrawal", "buffer_deposit", "buffer_balance_start",
-                "buffer_after_interest", "buffer_withdrawal", "actual_total_withdrawal",
-                "unmet_shortfall", "stock_balance_after_withdrawal",
-                "buffer_balance_after_withdrawal", "total_balance_after_withdrawal",
-                "stock_balance_next_start", "buffer_balance_next_start",
-            ]
-            for c in pct_cols:
-                display_table[c] = (display_table[c] * 100).round(2)
-            for c in money_cols:
-                display_table[c] = display_table[c].round(0)
-            display_table["year_fraction"] = display_table["year_fraction"].round(3)
+            # 화면 표시용: 핵심 6개 항목만 (A=필요인출, B=주식인출, C=버퍼인출, B-C=순이동, 계좌잔고 2개)
+            display_table = pd.DataFrame({
+                "필요인출(A)": result.table["w_target"],
+                "주식인출(B)": result.table["stock_withdrawal"],
+                "버퍼인출(C)": result.table["buffer_withdrawal"],
+                "B-C": result.table["stock_withdrawal"] - result.table["buffer_withdrawal"],
+                "주식잔고": result.table["stock_balance_after_withdrawal"],
+                "버퍼잔고": result.table["buffer_balance_after_withdrawal"],
+            }).round(0)
 
             st.dataframe(display_table, use_container_width=True)
+            st.caption("수익률·인플레이션 등 상세 데이터는 아래 CSV 다운로드에 전체 포함되어 있습니다.")
 
             # --- 잔고 추이 차트 (주식/버퍼/합계 동일 기준) ---
             fig = go.Figure()
@@ -213,7 +214,8 @@ if run:
             st.download_button("결과 CSV 다운로드", csv, file_name=f"{ticker}_withdraw_sim_2bucket.csv")
 
         else:
-            st.markdown(f"##### 2️⃣ 인출 시뮬레이션 결과 (평균 인플레이션 {avg_inflation*100:.2f}%, 연도별 상세 생략)")
+            st.markdown("##### 2️⃣ 인출 시뮬레이션 결과")
+            st.caption(f"평균 인플레이션 {avg_inflation*100:.2f}% · 상세 연도별 데이터는 표에서 확인")
             result = simulate_withdrawal(
                 annual_returns, annual_inflation, initial_investment, initial_withdrawal,
                 year_fractions=year_fractions,
@@ -232,20 +234,14 @@ if run:
                 f"(미인출 차액: ${total_target - total_actual:,.0f})"
             )
 
-            display_table = result.table.copy()
-            pct_cols = ["stock_return", "inflation"]
-            money_cols = [
-                "balance_start", "balance_after_return", "profit",
-                "withdrawal_target", "actual_withdrawal",
-                "balance_after_withdrawal", "balance_next_start",
-            ]
-            for c in pct_cols:
-                display_table[c] = (display_table[c] * 100).round(2)
-            for c in money_cols:
-                display_table[c] = display_table[c].round(0)
-            display_table["year_fraction"] = display_table["year_fraction"].round(3)
+            display_table = pd.DataFrame({
+                "필요인출": result.table["withdrawal_target"],
+                "실제인출": result.table["actual_withdrawal"],
+                "인출후잔고": result.table["balance_after_withdrawal"],
+            }).round(0)
 
             st.dataframe(display_table, use_container_width=True)
+            st.caption("수익률·인플레이션 등 상세 데이터는 아래 CSV 다운로드에 전체 포함되어 있습니다.")
 
             fig = go.Figure()
             fig.add_trace(go.Scatter(
